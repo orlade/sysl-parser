@@ -1,0 +1,5 @@
+# Build
+node_modules
+
+# IDE
+.idea

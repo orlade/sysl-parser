@@ -1,0 +1,25 @@
+PetShopModel [package="io.sysl.demo.petshop.model"]:
+    !table Employee:
+        employeeId <: int [~pk, ~autoinc]
+        name <: string?
+        dob <: date?
+        error <: int
+
+    !table Breed:
+        breedId <: int [~pk, ~autoinc]
+        breedName <: string?
+        species <: string?
+        numLegs <: int?
+        avgLifespan <: decimal?
+        legRank <: int?
+
+    !table Pet:
+        petId <: int [~pk, ~autoinc]
+        breedId <: Breed.breedId
+        name <: string?
+        dob <: date?
+        numLegs <: int?
+
+    !table EmployeeTendsPet:
+        employeeId <: Employee.employeeId [~pk]
+        petId <: Pet.petId [~pk]
