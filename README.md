@@ -2,10 +2,12 @@
 
 A parser for [Sysl][sysl] specification files based on [Chevrotain][chevrotain].
 
+    npm install --save sysl-parser
+
 ## Usage
 
 Import as a library:
-
+   
     var Parser = require('sysl-parser');
     
     var content = require('fs').readFileSync('path/to/file.sysl', 'utf-8');
