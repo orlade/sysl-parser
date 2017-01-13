@@ -1,0 +1,6 @@
+PetShopFacade [package="io.sysl.demo.petshop.facade"]:
+    !wrap PetShopModel:
+        !table Employee
+        !table Breed
+        !table Pet
+        !table EmployeeTendsPet

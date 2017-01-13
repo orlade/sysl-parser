@@ -1,0 +1,27 @@
+PetShopApi [package="io.sysl.demo.petshop.api"]:
+    /petshop:
+        GET:
+            return PetShop
+
+    !type PetShop:
+        employees <: set of Employee
+        breeds <: set of Breed
+        numLegs <: int?
+
+    !type Employee:
+        name <: string?
+        dob <: date?
+        index <: int [~xml_attribute]
+
+    !type Breed:
+        name <: string?
+        species <: string?
+        pets <: set of Pet
+        avgLifespan <: decimal?
+        index <: int [~xml_attribute]
+
+    !type Pet:
+        name <: string?
+        dob <: date?
+        numLegs <: int?
+        legRank <: int

@@ -1,4 +1,6 @@
 const chevrotain = require('chevrotain');
+const sysl = require('./sysl_pb');
+const {build, setField, assign} = require('./protobuf-factory')(sysl);
 
 module.exports = (function syslGrammer() {
     // Written Docs for this tutorial step can be found here:
@@ -18,7 +20,6 @@ module.exports = (function syslGrammer() {
     const Namespace = createToken("Namespace", /[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+/);
     const Identifier = createToken("Identifier", /[A-Z]\w*/);
     const SmallIdentifier = createToken("SmallIdentifier", /[a-z]\w*/);
-    const TableName = createToken("TableName", /!table/);
 
     // Types
     const ForeignKeyType = createToken("ForeignKeyType", /[A-Z]\w*\.\w+/);
@@ -26,6 +27,12 @@ module.exports = (function syslGrammer() {
     const DecimalType = createToken("DecimalType", /decimal/);
     const StringType = createToken("StringType", /string/);
     const DateType = createToken("DateType", /date/);
+
+    const TypeDecl = createToken("TypeDecl", /!type/);
+    const TableDecl = createToken("TableDecl", /!table/);
+    const EnumDecl = createToken("EnumDecl", /!enum/);
+
+    const ViewDecl = createToken("ViewDecl", /!view/);
 
     // Symbols
     const Colon = createToken("Colon", /:/);
@@ -44,13 +51,16 @@ module.exports = (function syslGrammer() {
     const allTokens = [
         WhiteSpace,
 
-        TableName,
-
         ForeignKeyType,
         IntType,
         DecimalType,
         StringType,
         DateType,
+
+        TypeDecl,
+        TableDecl,
+        EnumDecl,
+        ViewDecl,
 
         Namespace,
         SmallIdentifier,
@@ -69,6 +79,18 @@ module.exports = (function syslGrammer() {
     const ModelLexer = new Lexer(allTokens);
 
 
+    const typeNameMap = {
+        '!table': 'Type.Relation',
+        '!view': 'View',
+        '!type': 'Type',
+    };
+
+    const typeFieldNameMap = {
+        '!table': 'relation',
+        '!view': 'view',
+        '!type': 'type',
+    };
+
     // ----------------- parser -----------------
 
     function ModelParser(input, config) {
@@ -82,108 +104,102 @@ module.exports = (function syslGrammer() {
         Parser.call(this, input, allTokens, config);
         const $ = this;
 
-        this.modelRule = $.RULE('modelRule', function() {
-            $.CONSUME(Identifier);
-            $.OPTION(function() {
-                $.SUBRULE($.modelAttrs);
-            });
+
+        this.moduleSpec = $.RULE('moduleSpec', () => {
+            const module = build('Module');
+            const appsMap = module.getAppsMap();
+            const apps = $.MANY(() => $.SUBRULE($.appSpec));
+            apps.forEach(app => appsMap.set([app.getName().getPartList()[0]], app));
+            return module;
+        });
+
+        this.appSpec = $.RULE('appSpec', () => {
+            const app = build('Application');
+            setField(app, 'name', build('AppName')).addPart($.CONSUME(Identifier).image);
+            assign(app, 'attrsMap', $.OPTION(() => $.SUBRULE($.attributeSpec)).values);
+
             $.CONSUME(Colon);
-            $.MANY(function() {
-                $.SUBRULE($.tableStatement);
-                $.MANY2(function() {
-                    $.SUBRULE($.fieldStatement);
-                });
-            })
+
+            assign(app, 'typesMap', $.MANY(() => $.SUBRULE($.typeSpec)));
+
+            return app;
         });
 
-        this.attrStatement = $.RULE('attrStatement', function() {
-            $.CONSUME(SmallIdentifier);
-            $.CONSUME(Equals);
-            $.CONSUME(DoubleQuote);
-            $.CONSUME(Namespace);
-            $.CONSUME2(DoubleQuote);
-        });
-
-        this.modelAttrs = $.RULE('modelAttrs', function() {
+        this.attributeSpec = $.RULE('attributeSpec', () => {
             $.CONSUME(LSquare);
-            $.OPTION(function() {
-                $.SUBRULE($.attrStatement);
-                $.MANY(function() {
-                    $.CONSUME(Comma);
-                    $.SUBRULE2($.attrStatement);
-                });
-            });
+            const result = $.MANY_SEP(Comma, () => $.SUBRULE($.attrStatement));
             $.CONSUME(RSquare);
+            return result;
         });
 
-        this.tableStatement = $.RULE('tableStatement', function() {
-            $.CONSUME(TableName);
-            $.CONSUME(Identifier);
+        this.typeDeclStatement = $.RULE('typeDeclStatement', () => $.OR([
+            {ALT: () => $.CONSUME(TypeDecl)},
+            {ALT: () => $.CONSUME(TableDecl)},
+            {ALT: () => $.CONSUME(EnumDecl)},
+        ]));
+
+        this.typeSpec = $.RULE('typeSpec', () => {
+            const type = build('Type');
+
+            const metatype = $.SUBRULE($.typeDeclStatement).image;
+            const oneOf = setField(type, typeFieldNameMap[metatype], build(typeNameMap[metatype]));
+            const name = $.CONSUME(Identifier).image;
+
             $.CONSUME(Colon);
+
+            $.MANY(() => $.SUBRULE($.fieldStatement));
+            return {[name]: type};
         });
 
-        this.fieldStatement = $.RULE('fieldStatement', function() {
+        this.fieldStatement = $.RULE('fieldStatement', () => {
+            const type = build('Type');
             $.CONSUME(SmallIdentifier);
             $.CONSUME(Subset);
             $.SUBRULE($.typeStatement);
-            $.OPTION(function() {
-                $.CONSUME(QuestionMark);
-            });
-            $.OPTION2(function() {
-                $.SUBRULE($.fieldAttrs);
-            });
+            $.OPTION(() => $.CONSUME(QuestionMark));
+            $.OPTION2(() => $.SUBRULE($.fieldAttrs));
+            return type;
         });
 
-        this.fieldAttrs = $.RULE('fieldAttrs', function() {
+        this.fieldAttrs = $.RULE('fieldAttrs', () => {
+            const attr = build('Attribute');
             $.CONSUME(LSquare);
-            $.OPTION(function() {
-                $.SUBRULE($.fieldAttr);
-                $.MANY(function() {
-                    $.CONSUME(Comma);
-                    $.SUBRULE2($.fieldAttr);
-                });
-            });
+            $.MANY_SEP(Comma, () => $.SUBRULE($.fieldAttr));
             $.CONSUME(RSquare);
+            return attr;
         });
 
-        this.fieldAttr = $.RULE('fieldAttr', function() {
-            $.OPTION(function() {
-                $.CONSUME(Tilde);
-            });
+        this.fieldAttr = $.RULE('fieldAttr', () => {
+            $.OPTION(() => $.CONSUME(Tilde));
             $.CONSUME(SmallIdentifier);
         });
 
-        this.typeStatement = $.RULE('typeStatement', function() {
+        this.typeStatement = $.RULE('typeStatement', () => {
             $.OR([
-                {
-                    ALT: function() {
-                        $.CONSUME(IntType)
-                    }
-                },
-                {
-                    ALT: function() {
-                        $.CONSUME(DecimalType)
-                    }
-                },
-                {
-                    ALT: function() {
-                        $.CONSUME(StringType)
-                    }
-                },
-                {
-                    ALT: function() {
-                        $.CONSUME(DateType)
-                    }
-                },
-                {
-                    ALT: function() {
-                        $.CONSUME(ForeignKeyType)
-                    }
-                },
+                {ALT: () => $.CONSUME(IntType)},
+                {ALT: () => $.CONSUME(DecimalType)},
+                {ALT: () => $.CONSUME(StringType)},
+                {ALT: () => $.CONSUME(DateType)},
+                {ALT: () => $.CONSUME(ForeignKeyType)},
             ], "a type");
-            $.OPTION(function() {
+            $.OPTION(() => {
                 $.CONSUME(QuestionMark);
-            })
+            });
+        });
+
+        this.endpointSpec = $.RULE('endpointSpec', () => {
+        });
+
+        this.viewSpec = $.RULE('viewSpec', () => {
+        });
+
+        this.attrStatement = $.RULE('attrStatement', () => {
+            const key = $.CONSUME(SmallIdentifier).image;
+            $.CONSUME(Equals);
+            $.CONSUME(DoubleQuote);
+            const value = $.CONSUME(Namespace).image;
+            $.CONSUME2(DoubleQuote);
+            return {[key]: value};
         });
 
         // very important to call this after all the rules have been defined.
@@ -196,7 +212,7 @@ module.exports = (function syslGrammer() {
     ModelParser.prototype.constructor = ModelParser;
 
     ModelParser.lexer = ModelLexer;
-    ModelParser.defaultRule = "modelRule";
+    ModelParser.defaultRule = 'moduleSpec';
 
     return ModelParser;
 }());
