@@ -22,6 +22,9 @@ const load = (fixture) => fs.readFileSync(`test/fixtures/${fixture}.sysl`, 'utf-
  */
 buildParser = (fixture) => {
     const lexerResult = Parser.lexer.tokenize(load(fixture));
+    if (lexerResult.errors.length) {
+        console.error(lexerResult.errors);
+    }
     lexerResult.errors.should.be.empty;
     return new Parser(lexerResult.tokens);
 };
