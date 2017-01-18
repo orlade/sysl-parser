@@ -1,7 +1,7 @@
 const sysl = require('../sysl_pb');
-const pb = require('google-protobuf');
 const {parse} = require('./utils');
 
+const JsonWriter = require('../JsonWriter');
 
 describe("Sysl Parser", () => {
 
@@ -15,14 +15,23 @@ describe("Sysl Parser", () => {
         const apps = result.getAppsMap();
         const app = apps.get('PetShopModel');
         const tables = app.getTypesMap();
-        const employee = tables.get('Employee');
-        const fields = employee.getRelation().getAttrDefsMap();
+        const employee = tables.get('Employee').getRelation();
+        const employeeFields = employee.getAttrDefsMap();
+        const tends = tables.get('EmployeeTendsPet').getRelation();
+        const tendsFields = tends.getAttrDefsMap();
 
         apps.getLength().should.equal(1);
         app.getAttrsMap().get('package').getS().should.equal('io.sysl.demo.petshop.model');
         tables.getLength().should.equal(4);
-        fields.getLength().should.equal(4);
-        fields.get('employeeId').getPrimitive().should.equal(sysl.Type.Primitive.INT);
+
+        employee.getPrimaryKey().getAttrNameList().should.eql(['employeeId']);
+        employeeFields.getLength().should.equal(4);
+        employeeFields.get('employeeId').getPrimitive().should.equal(sysl.Type.Primitive.INT);
+        employeeFields.get('employeeId').getAttrsMap().get('autoinc').should.not.be.null;
+
+        tends.getPrimaryKey().getAttrNameList().should.eql(['employeeId', 'petId']);
+        tendsFields.getLength().should.equal(2);
+        tendsFields.get('employeeId').getTypeRef().getRef().getPathList().should.eql(['Employee', 'employeeId']);
     });
 
 });

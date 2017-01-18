@@ -1,6 +1,6 @@
 const chevrotain = require('chevrotain');
 const sysl = require('./sysl_pb');
-const {build, setField, assign} = require('./protobuf-factory')(sysl);
+const {build, setField, assign, onlyKey, only} = require('./protobuf-factory')(sysl);
 
 module.exports = (function syslGrammar() {
     // Written Docs for this tutorial step can be found here:
@@ -141,7 +141,12 @@ module.exports = (function syslGrammar() {
 
             $.CONSUME(Colon);
 
-            assign(type.getRelation(), 'attrDefsMap', $.MANY(() => $.SUBRULE($.fieldStatement)));
+            const attrDefs = $.MANY(() => $.SUBRULE($.fieldStatement));
+            assign(type.getRelation(), 'attrDefsMap', attrDefs);
+
+            const pks = attrDefs.filter(o => only(o).getAttrsMap().get('pk')).map(onlyKey);
+            const pk = build('Type.Relation.Key', {attrNameList: pks});
+            setField(type.getRelation(), 'primaryKey', pk);
             return {[name]: type};
         });
 

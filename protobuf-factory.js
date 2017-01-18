@@ -48,5 +48,17 @@ module.exports = (namespace) => {
         return Object.keys(fields).reduce((map, k) => map.set(k, fields[k]), map);
     }
 
-    return {build, setField, assign};
+    /**
+     * Helper method: returns the first key of an object.
+     * @param obj
+     */
+    const onlyKey = (obj) => Object.keys(obj)[0];
+
+    /**
+     * Helper method: returns the value corresponding to the first key of an object.
+     * @param obj
+     */
+    const only = (obj) => obj[onlyKey(obj)];
+
+    return {build, setField, assign, only, onlyKey};
 };
