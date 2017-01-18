@@ -169,7 +169,6 @@ module.exports = (function syslGrammar() {
         });
 
         this.typeStatement = $.RULE('typeStatement', () => {
-            //const type = build('Type');
             return $.OR([
                 {ALT: () => $.CONSUME(IntType) && ['primitive', sysl.Type.Primitive.INT]},
                 {ALT: () => $.CONSUME(DecimalType) && ['primitive', sysl.Type.Primitive.DECIMAL]},
@@ -183,7 +182,6 @@ module.exports = (function syslGrammar() {
                     }
                 },
             ], "a type");
-            //return type;
         });
 
         this.fieldAttrs = $.RULE('fieldAttrs', () => {

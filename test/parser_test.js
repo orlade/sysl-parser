@@ -28,6 +28,8 @@ describe("Sysl Parser", () => {
         employeeFields.getLength().should.equal(4);
         employeeFields.get('employeeId').getPrimitive().should.equal(sysl.Type.Primitive.INT);
         employeeFields.get('employeeId').getAttrsMap().get('autoinc').should.not.be.null;
+        employeeFields.get('employeeId').getOpt().should.be.false;
+        employeeFields.get('name').getOpt().should.be.true;
 
         tends.getPrimaryKey().getAttrNameList().should.eql(['employeeId', 'petId']);
         tendsFields.getLength().should.equal(2);
