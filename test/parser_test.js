@@ -1,7 +1,7 @@
 const sysl = require('../sysl_pb');
-const {parse} = require('./utils');
+const {load, buildParser, parse} = require('./utils');
 
-const JsonWriter = require('../JsonWriter');
+const Parser = require('../parser');
 
 describe("Sysl Parser", () => {
 
@@ -35,5 +35,10 @@ describe("Sysl Parser", () => {
         tendsFields.getLength().should.equal(2);
         tendsFields.get('employeeId').getTypeRef().getRef().getPathList().should.eql(['Employee', 'employeeId']);
     });
+
+    it("fails to parse invalid model", () => {
+        const lexerResult = Parser.lexer.tokenize(load('model_invalid'));
+        lexerResult.errors.should.not.be.empty;
+    })
 
 });
