@@ -5,7 +5,7 @@ const JsonWriter = require('../JsonWriter');
 
 describe("Sysl Parser", () => {
 
-    it.skip("can parse a simple model", () => {
+    it("can parse a simple model", () => {
         const parser = parse('model_simple');
         // TODO: Check results.
     });
