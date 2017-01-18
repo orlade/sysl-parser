@@ -2,7 +2,7 @@ const chevrotain = require('chevrotain');
 const sysl = require('./sysl_pb');
 const {build, setField, assign} = require('./protobuf-factory')(sysl);
 
-module.exports = (function syslGrammer() {
+module.exports = (function syslGrammar() {
     // Written Docs for this tutorial step can be found here:
     // https://github.com/SAP/chevrotain/blob/master/docs/tutorial/step2_parsing.md
 
@@ -132,14 +132,8 @@ module.exports = (function syslGrammer() {
             return result;
         });
 
-        this.typeDeclStatement = $.RULE('typeDeclStatement', () => $.OR([
-            {ALT: () => $.CONSUME(TypeDecl)},
-            {ALT: () => $.CONSUME(TableDecl)},
-            {ALT: () => $.CONSUME(EnumDecl)},
-        ]));
-
         this.typeSpec = $.RULE('typeSpec', () => {
-            const type = build('Type');
+            const type = build('Type', {relation: build('Type.Relation')});
 
             const metatype = $.SUBRULE($.typeDeclStatement).image;
             const oneOf = setField(type, typeFieldNameMap[metatype], build(typeNameMap[metatype]));
@@ -147,44 +141,56 @@ module.exports = (function syslGrammer() {
 
             $.CONSUME(Colon);
 
-            $.MANY(() => $.SUBRULE($.fieldStatement));
+            assign(type.getRelation(), 'attrDefsMap', $.MANY(() => $.SUBRULE($.fieldStatement)));
             return {[name]: type};
         });
 
+        this.typeDeclStatement = $.RULE('typeDeclStatement', () => $.OR([
+            {ALT: () => $.CONSUME(TypeDecl)},
+            {ALT: () => $.CONSUME(TableDecl)},
+            {ALT: () => $.CONSUME(EnumDecl)},
+        ]));
+
         this.fieldStatement = $.RULE('fieldStatement', () => {
-            const type = build('Type');
-            $.CONSUME(SmallIdentifier);
+            const name = $.CONSUME(SmallIdentifier).image;
             $.CONSUME(Subset);
-            $.SUBRULE($.typeStatement);
-            $.OPTION(() => $.CONSUME(QuestionMark));
-            $.OPTION2(() => $.SUBRULE($.fieldAttrs));
-            return type;
+            const [key, value] = $.SUBRULE($.typeStatement);
+            const type = build('Type', {[key]: value});
+
+            type.setOpt(!!$.OPTION(() => $.CONSUME(QuestionMark)));
+            const attrs = $.OPTION2(() => $.SUBRULE($.fieldAttrs));
+            attrs && assign(type, 'attrsMap', attrs);
+            return {[name]: type};
+        });
+
+        this.typeStatement = $.RULE('typeStatement', () => {
+            //const type = build('Type');
+            return $.OR([
+                {ALT: () => $.CONSUME(IntType) && ['primitive', sysl.Type.Primitive.INT]},
+                {ALT: () => $.CONSUME(DecimalType) && ['primitive', sysl.Type.Primitive.DECIMAL]},
+                {ALT: () => $.CONSUME(StringType) && ['primitive', sysl.Type.Primitive.STRING]},
+                {ALT: () => $.CONSUME(DateType) && ['primitive', sysl.Type.Primitive.DATE]},
+                {
+                    ALT: () => {
+                        const sref = build('ScopedRef', {ref: build('Scope')});
+                        setField(sref.getRef(), 'pathList', $.CONSUME(ForeignKeyType).image.split('.'));
+                        return ['typeRef', sref];
+                    }
+                },
+            ], "a type");
+            //return type;
         });
 
         this.fieldAttrs = $.RULE('fieldAttrs', () => {
-            const attr = build('Attribute');
             $.CONSUME(LSquare);
-            $.MANY_SEP(Comma, () => $.SUBRULE($.fieldAttr));
+            const attrNames = $.MANY_SEP(Comma, () => $.SUBRULE($.fieldAttr)).values;
             $.CONSUME(RSquare);
-            return attr;
+            return attrNames.map(name => ({[name]: build('Attribute')}));
         });
 
         this.fieldAttr = $.RULE('fieldAttr', () => {
             $.OPTION(() => $.CONSUME(Tilde));
-            $.CONSUME(SmallIdentifier);
-        });
-
-        this.typeStatement = $.RULE('typeStatement', () => {
-            $.OR([
-                {ALT: () => $.CONSUME(IntType)},
-                {ALT: () => $.CONSUME(DecimalType)},
-                {ALT: () => $.CONSUME(StringType)},
-                {ALT: () => $.CONSUME(DateType)},
-                {ALT: () => $.CONSUME(ForeignKeyType)},
-            ], "a type");
-            $.OPTION(() => {
-                $.CONSUME(QuestionMark);
-            });
+            return $.CONSUME(SmallIdentifier).image;
         });
 
         this.endpointSpec = $.RULE('endpointSpec', () => {
@@ -194,12 +200,13 @@ module.exports = (function syslGrammer() {
         });
 
         this.attrStatement = $.RULE('attrStatement', () => {
+            const attr = build('Attribute');
             const key = $.CONSUME(SmallIdentifier).image;
             $.CONSUME(Equals);
             $.CONSUME(DoubleQuote);
-            const value = $.CONSUME(Namespace).image;
+            setField(attr, 's', $.CONSUME(Namespace).image);
             $.CONSUME2(DoubleQuote);
-            return {[key]: value};
+            return {[key]: attr};
         });
 
         // very important to call this after all the rules have been defined.

@@ -32,13 +32,13 @@ buildParser = (fixture) => {
  *
  * @param {string} fixture The path to the fixture file to load.
  * @param {?string} rule The rule to parse the tokens with.
- * @return {Parser} The parser created for the fixture tokens, containing the parsing results.
+ * @return {object} The result of the parse operation.
  */
 parse = (fixture, rule = Parser.defaultRule) => {
     const parser = buildParser(fixture);
-    parser[rule]();
+    const result = parser[rule]();
     parser.errors.should.be.empty;
-    return parser;
+    return result;
 };
 
 module.exports = {
