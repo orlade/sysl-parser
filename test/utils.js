@@ -39,9 +39,11 @@ buildParser = (fixture) => {
  */
 parse = (fixture, rule = Parser.defaultRule) => {
     const parser = buildParser(fixture);
-    const result = parser[rule]();
+    if (parser.errors.length) {
+        console.error(parser.errors);
+    }
     parser.errors.should.be.empty;
-    return result;
+    return parser[rule]();
 };
 
 module.exports = {

@@ -1,4 +1,4 @@
-const sysl = require('../sysl_pb');
+const sysl = require('sysl-proto');
 const {load, buildParser, parse} = require('./utils');
 
 const Parser = require('../parser');
@@ -34,6 +34,15 @@ describe("Sysl Parser", () => {
         tends.getPrimaryKey().getAttrNameList().should.eql(['employeeId', 'petId']);
         tendsFields.getLength().should.equal(2);
         tendsFields.get('employeeId').getTypeRef().getRef().getPathList().should.eql(['Employee', 'employeeId']);
+    });
+
+    it("can parse the Petshop model", () => {
+        const result = parse('api_petshop');
+        const app = result.getAppsMap().get('PetShopApi');
+        const endpoint = app.getEndpointsMap().get('petshop');
+
+        app.getAttrsMap().get('package').getS().should.equal('io.sysl.demo.petshop.api');
+        endpoint.getRestParams().getMethod().should.equal(sysl.Endpoint.RestParams.Method.GET);
     });
 
     it("fails to parse invalid model", () => {

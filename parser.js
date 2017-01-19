@@ -1,5 +1,5 @@
 const chevrotain = require('chevrotain');
-const sysl = require('./sysl_pb');
+const sysl = require('sysl-proto');
 const {build, setField, assign, onlyKey, only} = require('./protobuf-factory')(sysl);
 
 module.exports = (function syslGrammar() {
@@ -12,7 +12,8 @@ module.exports = (function syslGrammar() {
     // without any actions) using the Tokens defined in the previous step.
     // modification to the grammar will be displayed in the syntax diagrams panel.
 
-    const createToken = (name, pattern) => chevrotain.createToken({name, pattern});
+    const createToken = (name, pattern, longer_alt) =>
+        chevrotain.createToken({name, pattern, longer_alt});
     const Lexer = chevrotain.Lexer;
     const Parser = chevrotain.Parser;
 
@@ -33,6 +34,9 @@ module.exports = (function syslGrammar() {
     const EnumDecl = createToken("EnumDecl", /!enum/);
 
     const ViewDecl = createToken("ViewDecl", /!view/);
+    const EndpointDecl = createToken("EndpointDecl", /\/\w+/);
+
+    const MethodDecl = createToken("MethodDecl", /(?:GET|POST|PUT|DELETE)/, Identifier);
 
     // Symbols
     const Colon = createToken("Colon", /:/);
@@ -61,6 +65,8 @@ module.exports = (function syslGrammar() {
         TableDecl,
         EnumDecl,
         ViewDecl,
+        EndpointDecl,
+        MethodDecl,
 
         Namespace,
         SmallIdentifier,
@@ -116,11 +122,13 @@ module.exports = (function syslGrammar() {
         this.appSpec = $.RULE('appSpec', () => {
             const app = build('Application');
             setField(app, 'name', build('AppName')).addPart($.CONSUME(Identifier).image);
-            assign(app, 'attrsMap', $.OPTION(() => $.SUBRULE($.attributeSpec)).values);
+            assign(app, 'attrsMap', $.OPTION(() => $.SUBRULE($.attributeSpec)), 'values');
 
             $.CONSUME(Colon);
 
-            assign(app, 'typesMap', $.MANY(() => $.SUBRULE($.typeSpec)));
+            $.MANY(() => $.SUBRULE($.modulePartSpec)).forEach(part => {
+                assign(app, `${only(part)._type.toLowerCase()}sMap`, [part]);
+            });
 
             return app;
         });
@@ -132,29 +140,41 @@ module.exports = (function syslGrammar() {
             return result;
         });
 
+        this.modulePartSpec = $.RULE('modulePartSpec', () => $.OR([
+            {ALT: () => $.SUBRULE1($.typeSpec)},
+            {ALT: () => $.SUBRULE2($.endpointSpec)},
+        ]));
+
         this.typeSpec = $.RULE('typeSpec', () => {
-            const type = build('Type', {relation: build('Type.Relation')});
+            const type = build('Type');
 
-            const metatype = $.SUBRULE($.typeDeclStatement).image;
+            const metatype = $.SUBRULE($.typeDeclStatement);
             const oneOf = setField(type, typeFieldNameMap[metatype], build(typeNameMap[metatype]));
-            const name = $.CONSUME(Identifier).image;
 
+            const name = $.CONSUME(Identifier).image;
             $.CONSUME(Colon);
 
+            // TODO: Other types
+            setField(type, 'relation', $.SUBRULE($.relationSpec));
+            return {[name]: type};
+        });
+
+        this.relationSpec = $.RULE('relationSpec', () => {
+            const relation = build('Type.Relation');
+
             const attrDefs = $.MANY(() => $.SUBRULE($.fieldStatement));
-            assign(type.getRelation(), 'attrDefsMap', attrDefs);
+            assign(relation, 'attrDefsMap', attrDefs);
 
             const pks = attrDefs.filter(o => only(o).getAttrsMap().get('pk')).map(onlyKey);
-            const pk = build('Type.Relation.Key', {attrNameList: pks});
-            setField(type.getRelation(), 'primaryKey', pk);
-            return {[name]: type};
+            setField(relation, 'primaryKey', build('Type.Relation.Key', {attrNameList: pks}));
+            return relation;
         });
 
         this.typeDeclStatement = $.RULE('typeDeclStatement', () => $.OR([
             {ALT: () => $.CONSUME(TypeDecl)},
             {ALT: () => $.CONSUME(TableDecl)},
             {ALT: () => $.CONSUME(EnumDecl)},
-        ]));
+        ]).image);
 
         this.fieldStatement = $.RULE('fieldStatement', () => {
             const name = $.CONSUME(SmallIdentifier).image;
@@ -197,6 +217,18 @@ module.exports = (function syslGrammar() {
         });
 
         this.endpointSpec = $.RULE('endpointSpec', () => {
+            const endpoint = build('Endpoint');
+            const params = setField(endpoint, 'restParams', build('Endpoint.RestParams'));
+            const name = $.SUBRULE($.endpointDeclStatement).substr(1);
+            setField(params, 'method', sysl.Endpoint.RestParams.Method[$.CONSUME(MethodDecl).image]);
+            $.CONSUME(Colon);
+            return {[name]: endpoint};
+        });
+
+        this.endpointDeclStatement = $.RULE('endpointDeclStatement', () => {
+            const endpoint = $.CONSUME(EndpointDecl).image;
+            $.CONSUME(Colon);
+            return endpoint;
         });
 
         this.viewSpec = $.RULE('viewSpec', () => {
